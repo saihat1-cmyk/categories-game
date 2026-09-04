@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>بنت وولد</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#12213A;
+    --surface:#1B2E4D;
+    --surface-2:#23375A;
+    --surface-3:#2D4470;
+    --accent:#F2A93B;
+    --accent-dim:#8a6a2c;
+    --urgent:#E85A4F;
+    --good:#F2A93B;
+    --shared:#37B7A6;
+    --zero:#5A6B85;
+    --text:#F5F2EA;
+    --text-dim:#A9B7CE;
+    --border:#33507E;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:'Tajawal',sans-serif; min-height:100%;}
+  #app{max-width:480px; margin:0 auto; min-height:100vh; padding:20px 18px 40px; display:flex; flex-direction:column;}
+  h1,h2,h3{font-family:'Cairo',sans-serif; margin:0;}
+  button{font-family:'Tajawal',sans-serif; cursor:pointer; border:none;}
+  input{font-family:'Tajawal',sans-serif;}
+  ::selection{background:var(--accent); color:#12213A;}
+
+  .btn{
+    display:block; width:100%; padding:16px; border-radius:16px; font-size:17px; font-weight:700;
+    text-align:center; transition:transform .12s ease, filter .12s ease;
+  }
+  .btn:active{transform:scale(0.97);}
+  .btn-primary{background:var(--accent); color:#1B1206;}
+  .btn-primary:disabled{background:var(--surface-3); color:var(--text-dim); cursor:not-allowed;}
+  .btn-outline{background:transparent; color:var(--text); border:2px solid var(--border);}
+  .btn-danger-outline{background:transparent; color:var(--urgent); border:2px solid var(--urgent);}
+  .btn-sm{padding:10px 16px; font-size:14px; border-radius:12px; width:auto; display:inline-block;}
+
+  input[type=text]{
+    width:100%; padding:15px 16px; border-radius:14px; border:2px solid var(--border);
+    background:var(--surface-2); color:var(--text); font-size:16px; outline:none;
+  }
+  input[type=text]:focus{border-color:var(--accent);}
+
+  .stack{display:flex; flex-direction:column; gap:12px;}
+  .row{display:flex; align-items:center; gap:10px;}
+  .spacer{flex:1;}
+  .center{text-align:center;}
+  .muted{color:var(--text-dim);}
+  .small{font-size:13px;}
+
+  /* ---------- Home ---------- */
+  .home-hero{margin:36px 0 28px; text-align:center;}
+  .tile-row{display:flex; justify-content:center; gap:10px; margin-bottom:18px;}
+  .hero-tile{
+    width:52px; height:52px; border-radius:12px; background:var(--surface-2); border:2px solid var(--border);
+    display:flex; align-items:center; justify-content:center; font-family:'Cairo',sans-serif; font-weight:900; font-size:26px;
+    transform:rotate(var(--r,0deg));
+  }
+  .home-title{font-size:34px; font-weight:900; margin-bottom:6px;}
+  .home-sub{color:var(--text-dim); font-size:15px; line-height:1.7;}
+  .card{background:var(--surface); border-radius:20px; padding:20px; border:1px solid var(--border);}
+  .mode-toggle{display:flex; background:var(--surface-2); border-radius:14px; padding:4px; margin-bottom:16px;}
+  .mode-toggle button{flex:1; padding:10px; border-radius:11px; background:transparent; color:var(--text-dim); font-weight:700;}
+  .mode-toggle button.active{background:var(--accent); color:#1B1206;}
+
+  /* ---------- Lobby ---------- */
+  .room-code-box{background:var(--surface); border:2px dashed var(--accent); border-radius:18px; padding:22px; text-align:center; margin-bottom:18px;}
+  .room-code{font-family:'Cairo',sans-serif; font-size:42px; font-weight:900; letter-spacing:6px; color:var(--accent);}
+  .player-chip{
+    background:var(--surface-2); border-radius:14px; padding:13px 16px; display:flex; align-items:center; gap:10px;
+  }
+  .avatar{
+    width:34px; height:34px; border-radius:50%; background:var(--accent); color:#1B1206; font-weight:900;
+    display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0;
+  }
+  .host-badge{font-size:11px; background:var(--accent-dim); color:var(--accent); padding:3px 8px; border-radius:8px; font-weight:700;}
+
+  /* ---------- Playing ---------- */
+  .letter-wrap{text-align:center; margin:6px 0 18px;}
+  .letter-tile{
+    width:96px; height:96px; border-radius:22px; background:linear-gradient(160deg, var(--accent), #d98f22);
+    color:#1B1206; font-family:'Cairo',sans-serif; font-weight:900; font-size:52px;
+    display:flex; align-items:center; justify-content:center; margin:0 auto 10px;
+    box-shadow:0 8px 24px rgba(242,169,59,.25);
+    animation:pop .45s cubic-bezier(.2,1.4,.4,1);
+  }
+  @keyframes pop{from{transform:scale(.4) rotate(-12deg); opacity:0;} to{transform:scale(1) rotate(0); opacity:1;}}
+  .timer-track{height:10px; border-radius:6px; background:var(--surface-2); overflow:hidden; margin:14px 0 4px;}
+  .timer-fill{height:100%; border-radius:6px; background:var(--good); transition:width 1s linear, background .3s ease;}
+  .timer-label{font-family:'Cairo',sans-serif; font-weight:800; font-size:15px;}
+
+  .cat-row{background:var(--surface); border-radius:16px; padding:12px 14px; border:1px solid var(--border);}
+  .cat-label{display:flex; align-items:center; gap:8px; font-weight:700; margin-bottom:8px; font-size:14px;}
+  .cat-input{width:100%; padding:12px 14px; border-radius:12px; border:2px solid var(--border); background:var(--surface-2); color:var(--text); font-size:16px; outline:none;}
+  .cat-input:focus{border-color:var(--accent);}
+  .cat-input.invalid{border-color:var(--urgent);}
+  .cat-hint{font-size:11px; color:var(--urgent); margin-top:5px; min-height:14px;}
+
+  .ready-count{font-size:13px; color:var(--text-dim); text-align:center; margin-top:2px;}
+
+  /* ---------- Results ---------- */
+  .rank-card{background:var(--surface); border-radius:16px; padding:14px 16px; border:1px solid var(--border); cursor:pointer;}
+  .rank-card.first{border-color:var(--accent); background:linear-gradient(180deg, rgba(242,169,59,.14), var(--surface));}
+  .rank-num{
+    width:30px; height:30px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center;
+    font-family:'Cairo',sans-serif; font-weight:900; font-size:14px; flex-shrink:0;
+  }
+  .rank-num.gold{background:var(--accent); color:#1B1206;}
+  .breakdown{margin-top:12px; border-top:1px solid var(--border); padding-top:10px; display:none;}
+  .breakdown.open{display:block;}
+  .breakdown-row{display:flex; justify-content:space-between; padding:6px 0; font-size:13.5px; border-bottom:1px solid rgba(255,255,255,.05);}
+  .pts{font-weight:900; font-family:'Cairo',sans-serif;}
+  .pts.p10{color:var(--good);}
+  .pts.p5{color:var(--shared);}
+  .pts.p0{color:var(--zero);}
+
+  .banner{background:var(--surface-2); border-right:4px solid var(--urgent); border-radius:10px; padding:12px 14px; font-size:13.5px; color:var(--text);}
+  .toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--surface-3); color:var(--text); padding:12px 20px; border-radius:14px; font-size:14px; box-shadow:0 6px 20px rgba(0,0,0,.35); z-index:50;}
+
+  .top-bar{display:flex; align-items:center; margin-bottom:18px;}
+  .top-bar .room-pill{background:var(--surface-2); padding:6px 14px; border-radius:999px; font-family:'Cairo',sans-serif; font-weight:800; font-size:14px; letter-spacing:2px; color:var(--accent);}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function(){
+  const DB_URL = "https://hussain-alyousef-default-rtdb.firebaseio.com";
+  const GAME_PATH = "/categories-game";
+
+  const CATEGORIES = [
+    {key:"girl",    label:"بنت",         emoji:"👧"},
+    {key:"boy",     label:"ولد",         emoji:"👦"},
+    {key:"animal",  label:"حيوان",       emoji:"🐾"},
+    {key:"object",  label:"جماد",        emoji:"🧱"},
+    {key:"food",    label:"أكل",         emoji:"🍽️"},
+    {key:"country", label:"بلاد / مدينة", emoji:"🌍"},
+  ];
+
+  const LETTERS = ["ا","ب","ت","ث","ج","ح","خ","د","ر","ز","س","ش","ص","ض","ط","ع","غ","ف","ق","ك","ل","م","ن","ه","و","ي"];
+  const ROUND_DURATION = 90; // seconds
+
+  // ---------------- state ----------------
+  let screen = "home"; // home | lobby | playing | results
+  let playerId = "p_" + Math.random().toString(36).slice(2, 10);
+  let playerName = "";
+  let roomCode = null;
+  let room = null; // last fetched room doc
+  let pollTimer = null;
+  let tickTimer = null;
+  let serverOffset = 0; // serverTime - Date.now()
+  let isHost = false;
+  let expandedPlayer = null;
+  let renderedRoundKey = null; // to know when to rebuild the playing-screen DOM
+  let localAnswers = {}; // buffered local edits (playerId is always me here)
+  let saveTimers = {};
+  let errorBanner = null;
+
+  // ---------------- helpers ----------------
+  function el(html){
+    const t = document.createElement("template");
+    t.innerHTML = html.trim();
+    return t.content.firstChild;
+  }
+  function qs(sel, root){ return (root||document).querySelector(sel); }
+  function qsa(sel, root){ return Array.from((root||document).querySelectorAll(sel)); }
+
+  function normText(s){
+    if(!s) return "";
+    return s
+      .trim()
+      .replace(/[\u064B-\u0652\u0670]/g,"") // tashkeel
+      .replace(/[أإآٱ]/g,"ا")
+      .replace(/ى/g,"ي")
+      .replace(/ة/g,"ه")
+      .replace(/\s+/g," ")
+      .toLowerCase();
+  }
+  function normChar(c){ return normText(c); }
+
+  function showToast(msg, ms){
+    const old = qs(".toast"); if(old) old.remove();
+    const t = el(`<div class="toast">${msg}</div>`);
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(), ms||2200);
+  }
+
+  async function dbGet(path){
+    const res = await fetch(`${DB_URL}${path}.json`);
+    if(!res.ok) throw new Error("read_failed");
+    return res.json();
+  }
+  async function dbPatch(path, body){
+    const res = await fetch(`${DB_URL}${path}.json`, {
+      method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)
+    });
+    if(!res.ok) throw new Error("write_failed");
+    return res.json();
+  }
+  async function dbPut(path, body){
+    const res = await fetch(`${DB_URL}${path}.json`, {
+      method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)
+    });
+    if(!res.ok) throw new Error("write_failed");
+    return res.json();
+  }
+  async function dbDelete(path){
+    const res = await fetch(`${DB_URL}${path}.json`, { method:"DELETE" });
+    if(!res.ok) throw new Error("write_failed");
+    return res.json();
+  }
+
+  async function calibrateClock(){
+    try{
+      const path = `${GAME_PATH}/_ping/${playerId}`;
+      await dbPut(path, {t:{".sv":"timestamp"}});
+      const t0 = Date.now();
+      const data = await dbGet(path);
+      const serverTime = data && data.t ? data.t : Date.now();
+      serverOffset = serverTime - t0;
+      dbDelete(path).catch(()=>{});
+    }catch(e){ serverOffset = 0; }
+  }
+  function nowServer(){ return Date.now() + serverOffset; }
+
+  // ---------------- room actions ----------------
+  function genCode(){ return String(Math.floor(1000 + Math.random()*9000)); }
+
+  async function createRoom(name){
+    playerName = name;
+    let code = genCode();
+    try{
+      let attempts = 0;
+      while(attempts < 5){
+        const exists = await dbGet(`${GAME_PATH}/rooms/${code}`);
+        if(!exists) break;
+        code = genCode(); attempts++;
+      }
+    }catch(e){ /* if check fails, proceed anyway */ }
+    isHost = true;
+    const initial = {
+      hostId: playerId,
+      createdAt: {".sv":"timestamp"},
+      state: "lobby",
+      roundNumber: 0,
+      roundDuration: ROUND_DURATION,
+      currentLetter: null,
+      players: { [playerId]: { name: playerName, joinedAt: {".sv":"timestamp"} } },
+      rounds: {}
+    };
+    try{
+      await dbPut(`${GAME_PATH}/rooms/${code}`, initial);
+      roomCode = code;
+      room = initial;
+      screen = "lobby";
+      startPolling();
+      render();
+    }catch(e){ showError(); }
+  }
+
+  async function joinRoom(code, name){
+    playerName = name;
+    try{
+      const existing = await dbGet(`${GAME_PATH}/rooms/${code}`);
+      if(!existing){ showToast("ما لقيت غرفة بهذا الكود، تأكد منه 🤔"); return; }
+      await dbPatch(`${GAME_PATH}/rooms/${code}/players/${playerId}`, { name: playerName, joinedAt:{".sv":"timestamp"} });
+      const fresh = await dbGet(`${GAME_PATH}/rooms/${code}`);
+      roomCode = code;
+      room = fresh;
+      isHost = (fresh.hostId === playerId);
+      screen = fresh.state || "lobby";
+      startPolling();
+      render();
+    }catch(e){ showError(); }
+  }
+
+  async function leaveRoom(){
+    stopPolling();
+    try{ await dbDelete(`${GAME_PATH}/rooms/${roomCode}/players/${playerId}`); }catch(e){}
+    roomCode = null; room = null; isHost = false; screen = "home"; renderedRoundKey = null;
+    render();
+  }
+
+  function pickLetter(exclude){
+    let pool = LETTERS.filter(l => l !== exclude);
+    return pool[Math.floor(Math.random()*pool.length)];
+  }
+
+  async function startRound(){
+    if(!room) return;
+    const nextRound = (room.roundNumber||0) + 1;
+    const letter = pickLetter(room.currentLetter);
+    try{
+      await dbPatch(`${GAME_PATH}/rooms/${roomCode}`, {
+        state:"playing",
+        currentLetter: letter,
+        roundNumber: nextRound,
+        roundStartTime: {".sv":"timestamp"},
+        answers: null,
+        ready: null
+      });
+      const fresh = await dbGet(`${GAME_PATH}/rooms/${roomCode}`);
+      room = fresh; screen = "playing"; render();
+    }catch(e){ showError(); }
+  }
+
+  function scheduleSave(catKey){
+    clearTimeout(saveTimers[catKey]);
+    saveTimers[catKey] = setTimeout(async ()=>{
+      try{
+        await dbPatch(`${GAME_PATH}/rooms/${roomCode}/answers/${playerId}`, { [catKey]: localAnswers[catKey]||"" });
+      }catch(e){ /* silent, will retry on next keystroke */ }
+    }, 450);
+  }
+
+  async function toggleReady(){
+    const amReady = room && room.ready && room.ready[playerId];
+    try{
+      await dbPatch(`${GAME_PATH}/rooms/${roomCode}/ready/${playerId}`, true); // set true; unset not needed for v1
+      if(!amReady){ /* no-op */ }
+    }catch(e){ showError(); }
+  }
+
+  function computeScores(roomData){
+    const players = Object.keys(roomData.players||{});
+    const answers = roomData.answers || {};
+    const letter = roomData.currentLetter;
+    const result = {}; // playerId -> {perCategory, total}
+    players.forEach(pid => result[pid] = { perCategory:{}, total:0 });
+
+    CATEGORIES.forEach(cat => {
+      // collect normalized valid answers per player for this category
+      const norm = {}; // pid -> normalized text (only if valid & non-empty)
+      players.forEach(pid => {
+        const raw = (answers[pid] && answers[pid][cat.key]) || "";
+        const nText = normText(raw);
+        if(!nText){ return; }
+        const validStart = nText[0] === normChar(letter);
+        if(validStart) norm[pid] = nText;
+      });
+      // count frequency
+      const freq = {};
+      Object.values(norm).forEach(v => { freq[v] = (freq[v]||0) + 1; });
+      players.forEach(pid => {
+        const raw = (answers[pid] && answers[pid][cat.key]) || "";
+        let pts = 0;
+        if(norm[pid]){
+          pts = freq[norm[pid]] === 1 ? 10 : 5;
+        }
+        result[pid].perCategory[cat.key] = { answer: raw, points: pts };
+        result[pid].total += pts;
+      });
+    });
+    return result;
+  }
+
+  async function finalizeRound(){
+    try{
+      const fresh = await dbGet(`${GAME_PATH}/rooms/${roomCode}`);
+      if(!fresh || fresh.state !== "playing") return; // already finalized or room gone
+      const scores = computeScores(fresh);
+      await dbPatch(`${GAME_PATH}/rooms/${roomCode}`, {
+        state: "results",
+        [`rounds/${fresh.roundNumber}`]: { letter: fresh.currentLetter, scores }
+      });
+    }catch(e){ /* another client likely already finalized */ }
+  }
+
+  // ---------------- polling ----------------
+  function startPolling(){
+    stopPolling();
+    pollTimer = setInterval(async ()=>{
+      try{
+        const data = await dbGet(`${GAME_PATH}/rooms/${roomCode}`);
+        if(!data){ showToast("انتهت الغرفة أو تم حذفها"); leaveRoom(); return; }
+        room = data;
+        isHost = (room.hostId === playerId);
+        if(screen !== "playing" || room.state !== "playing"){
+          screen = room.state || "lobby";
+        }
+        errorBanner = null;
+        render();
+      }catch(e){ errorBanner = "تعذّر الاتصال بالخادم — بيعاد المحاولة تلقائيًا"; render(); }
+    }, 1200);
+
+    tickTimer = setInterval(()=>{
+      if(room && room.state === "playing"){
+        updateTimerUI();
+        checkAutoEnd();
+      }
+    }, 500);
+  }
+  function stopPolling(){
+    if(pollTimer) clearInterval(pollTimer);
+    if(tickTimer) clearInterval(tickTimer);
+    pollTimer = null; tickTimer = null;
+  }
+
+  let finalizeLock = false;
+  function checkAutoEnd(){
+    if(!room || room.state !== "playing" || !room.roundStartTime) return;
+    const elapsed = (nowServer() - room.roundStartTime)/1000;
+    const remaining = room.roundDuration - elapsed;
+    const players = Object.keys(room.players||{});
+    const readyCount = room.ready ? Object.keys(room.ready).length : 0;
+    const allReady = players.length > 0 && readyCount >= players.length;
+    if((remaining <= 0 || allReady) && !finalizeLock){
+      finalizeLock = true;
+      finalizeRound().finally(()=>{ setTimeout(()=>finalizeLock=false, 3000); });
+    }
+  }
+  function updateTimerUI(){
+    if(!room || !room.roundStartTime) return;
+    const elapsed = (nowServer() - room.roundStartTime)/1000;
+    const remaining = Math.max(0, room.roundDuration - elapsed);
+    const fill = qs("#timerFill");
+    const label = qs("#timerLabel");
+    if(fill){
+      const pct = Math.max(0, (remaining/room.roundDuration)*100);
+      fill.style.width = pct + "%";
+      fill.style.background = remaining <= 15 ? "var(--urgent)" : "var(--good)";
+    }
+    if(label){ label.textContent = Math.ceil(remaining) + " ث"; }
+  }
+
+  function showError(){ showToast("صار خطأ بالاتصال، جرّب مرة ثانية 🙏"); }
+
+  // ---------------- rendering ----------------
+  function render(){
+    const app = qs("#app");
+    if(screen === "home") return renderHome(app);
+    if(screen === "lobby") return renderLobby(app);
+    if(screen === "playing") return renderPlaying(app);
+    if(screen === "results") return renderResults(app);
+  }
+
+  function renderHome(app){
+    app.innerHTML = `
+      <div class="home-hero">
+        <div class="tile-row">
+          <div class="hero-tile" style="--r:-8deg">ب</div>
+          <div class="hero-tile" style="--r:6deg">و</div>
+          <div class="hero-tile" style="--r:-4deg">ل</div>
+        </div>
+        <div class="home-title">بنت وولد</div>
+        <div class="home-sub">حرف واحد… وست خانات. جهّز إجاباتك قبل ما ينتهي الوقت!</div>
+      </div>
+      <div class="card">
+        <div class="mode-toggle">
+          <button id="tabCreate" class="active">إنشاء غرفة</button>
+          <button id="tabJoin">الانضمام لغرفة</button>
+        </div>
+        <div class="stack" id="modeBody"></div>
+      </div>
+    `;
+    let mode = "create";
+    function renderModeBody(){
+      const body = qs("#modeBody");
+      if(mode === "create"){
+        body.innerHTML = `
+          <input type="text" id="nameInput" placeholder="اسمك" maxlength="20">
+          <button class="btn btn-primary" id="goBtn">إنشاء الغرفة</button>
+        `;
+      }else{
+        body.innerHTML = `
+          <input type="text" id="nameInput" placeholder="اسمك" maxlength="20">
+          <input type="text" id="codeInput" placeholder="كود الغرفة (٤ أرقام)" maxlength="4" inputmode="numeric">
+          <button class="btn btn-primary" id="goBtn">دخول الغرفة</button>
+        `;
+      }
+      qs("#goBtn").addEventListener("click", async ()=>{
+        const name = qs("#nameInput").value.trim();
+        if(!name){ showToast("اكتب اسمك أول 🙂"); return; }
+        if(mode === "create"){
+          qs("#goBtn").textContent = "جاري الإنشاء...";
+          await createRoom(name);
+        }else{
+          const code = qs("#codeInput").value.trim();
+          if(!/^\d{4}$/.test(code)){ showToast("اكتب كود مكوّن من ٤ أرقام"); return; }
+          qs("#goBtn").textContent = "جاري الدخول...";
+          await joinRoom(code, name);
+        }
+      });
+    }
+    renderModeBody();
+    qs("#tabCreate").addEventListener("click", ()=>{ mode="create"; qs("#tabCreate").classList.add("active"); qs("#tabJoin").classList.remove("active"); renderModeBody(); });
+    qs("#tabJoin").addEventListener("click", ()=>{ mode="join"; qs("#tabJoin").classList.add("active"); qs("#tabCreate").classList.remove("active"); renderModeBody(); });
+
+    // auto-fill room code from URL if present
+    const params = new URLSearchParams(location.search);
+    if(params.get("room")){
+      qs("#tabJoin").click();
+      setTimeout(()=>{ const ci = qs("#codeInput"); if(ci) ci.value = params.get("room"); }, 0);
+    }
+  }
+
+  function renderLobby(app){
+    if(!room) return;
+    const players = Object.entries(room.players||{});
+    app.innerHTML = `
+      <div class="room-code-box">
+        <div class="muted small" style="margin-bottom:4px;">شارك هذا الكود مع اللي تبيهم يدخلون</div>
+        <div class="room-code">${roomCode}</div>
+        <button class="btn btn-sm btn-outline" id="copyBtn" style="margin-top:12px;">نسخ الكود</button>
+      </div>
+      <div class="stack" id="playersList"></div>
+      <div style="flex:1"></div>
+      <div class="stack" style="margin-top:20px;">
+        ${isHost
+          ? `<button class="btn btn-primary" id="startBtn">${players.length < 2 ? "ابدأ اللعبة (يفضّل لاعبين أو أكثر)" : "ابدأ اللعبة 🎬"}</button>`
+          : `<div class="center muted small">بانتظار المضيف يبدأ اللعبة...</div>`}
+        <button class="btn btn-danger-outline" id="leaveBtn">مغادرة الغرفة</button>
+      </div>
+      ${errorBanner ? `<div class="banner" style="margin-top:14px;">${errorBanner}</div>` : ""}
+    `;
+    const list = qs("#playersList");
+    players.forEach(([pid, p])=>{
+      list.appendChild(el(`
+        <div class="player-chip">
+          <div class="avatar">${(p.name||"?")[0]}</div>
+          <div>${p.name}${pid===playerId ? " (أنت)":""}</div>
+          <div class="spacer"></div>
+          ${pid===room.hostId ? `<div class="host-badge">مضيف</div>`:""}
+        </div>
+      `));
+    });
+    qs("#copyBtn").addEventListener("click", ()=>{
+      navigator.clipboard && navigator.clipboard.writeText(roomCode);
+      showToast("انسخ الكود وأرسله 📋");
+    });
+    if(isHost) qs("#startBtn").addEventListener("click", startRound);
+    qs("#leaveBtn").addEventListener("click", leaveRoom);
+  }
+
+  function renderPlaying(app){
+    if(!room) return;
+    const roundKey = room.roundNumber + "_" + room.currentLetter;
+    if(renderedRoundKey !== roundKey){
+      renderedRoundKey = roundKey;
+      localAnswers = {};
+      expandedPlayer = null;
+      const players = Object.keys(room.players||{});
+      const readyCount = room.ready ? Object.keys(room.ready).length : 0;
+
+      app.innerHTML = `
+        <div class="letter-wrap">
+          <div class="letter-tile">${room.currentLetter}</div>
+          <div class="timer-track"><div class="timer-fill" id="timerFill" style="width:100%"></div></div>
+          <div class="timer-label" id="timerLabel">${room.roundDuration} ث</div>
+        </div>
+        <div class="stack" id="catList"></div>
+        <div style="margin-top:18px;">
+          <button class="btn btn-primary" id="readyBtn">أنا خلصت ✅</button>
+          <div class="ready-count" id="readyCount">${readyCount} من ${players.length} جاهزين</div>
+        </div>
+      `;
+      const catList = qs("#catList");
+      CATEGORIES.forEach(cat=>{
+        const row = el(`
+          <div class="cat-row">
+            <div class="cat-label"><span>${cat.emoji}</span><span>${cat.label}</span></div>
+            <input type="text" class="cat-input" data-cat="${cat.key}" placeholder="يبدأ بحرف ${room.currentLetter}...">
+            <div class="cat-hint" data-hint="${cat.key}"></div>
+          </div>
+        `);
+        catList.appendChild(row);
+      });
+      qsa(".cat-input").forEach(inp=>{
+        inp.addEventListener("input", ()=>{
+          const key = inp.dataset.cat;
+          localAnswers[key] = inp.value;
+          const hint = qs(`[data-hint="${key}"]`);
+          const nText = normText(inp.value);
+          const valid = !nText || nText[0] === normChar(room.currentLetter);
+          inp.classList.toggle("invalid", !valid);
+          hint.textContent = valid ? "" : `لازم يبدأ بحرف ${room.currentLetter}`;
+          scheduleSave(key);
+        });
+      });
+      qs("#readyBtn").addEventListener("click", async ()=>{
+        qs("#readyBtn").disabled = true;
+        qs("#readyBtn").textContent = "بانتظار الباقي...";
+        await toggleReady();
+      });
+      updateTimerUI();
+    } else {
+      // just refresh ready count text, don't touch inputs
+      const players = Object.keys(room.players||{});
+      const readyCount = room.ready ? Object.keys(room.ready).length : 0;
+      const rc = qs("#readyCount");
+      if(rc) rc.textContent = `${readyCount} من ${players.length} جاهزين`;
+      if(room.ready && room.ready[playerId]){
+        const btn = qs("#readyBtn");
+        if(btn && !btn.disabled){ btn.disabled = true; btn.textContent = "بانتظار الباقي..."; }
+      }
+    }
+  }
+
+  function renderResults(app){
+    if(!room) return;
+    const roundData = room.rounds ? room.rounds[room.roundNumber] : null;
+    const players = Object.entries(room.players||{});
+
+    // cumulative totals across all finished rounds
+    const totals = {};
+    players.forEach(([pid])=> totals[pid] = 0);
+    Object.values(room.rounds||{}).forEach(r=>{
+      Object.entries(r.scores||{}).forEach(([pid, s])=>{
+        if(totals[pid] === undefined) totals[pid] = 0;
+        totals[pid] += s.total;
+      });
+    });
+    const ranked = players.map(([pid,p])=>({pid, name:p.name, total: totals[pid]||0}))
+      .sort((a,b)=> b.total - a.total);
+
+    app.innerHTML = `
+      <div class="top-bar">
+        <div class="room-pill">${roomCode}</div>
+        <div class="spacer"></div>
+        <h2 style="font-size:20px;">نتائج الجولة ${room.roundNumber}</h2>
+      </div>
+      <div class="stack" id="rankList"></div>
+      <div style="margin-top:22px;">
+        ${isHost
+          ? `<button class="btn btn-primary" id="newRoundBtn">جولة جديدة 🔄</button>`
+          : `<div class="center muted small">بانتظار المضيف يبدأ جولة جديدة...</div>`}
+        <button class="btn btn-outline" id="leaveBtn2" style="margin-top:10px;">مغادرة الغرفة</button>
+      </div>
+    `;
+    const list = qs("#rankList");
+    ranked.forEach((r, idx)=>{
+      const roundScore = roundData && roundData.scores && roundData.scores[r.pid] ? roundData.scores[r.pid].total : 0;
+      const card = el(`
+        <div class="rank-card ${idx===0?'first':''}" data-pid="${r.pid}">
+          <div class="row">
+            <div class="rank-num ${idx===0?'gold':''}">${idx+1}</div>
+            <div>
+              <div style="font-weight:700;">${r.name}${r.pid===playerId?" (أنت)":""}</div>
+              <div class="muted small">هذي الجولة: ${roundScore} نقطة</div>
+            </div>
+            <div class="spacer"></div>
+            <div style="text-align:left;">
+              <div class="pts p10" style="font-size:20px;">${r.total}</div>
+              <div class="muted small">الإجمالي</div>
+            </div>
+          </div>
+          <div class="breakdown" data-breakdown="${r.pid}"></div>
+        </div>
+      `);
+      card.addEventListener("click", ()=>{
+        expandedPlayer = expandedPlayer === r.pid ? null : r.pid;
+        renderBreakdowns();
+      });
+      list.appendChild(card);
+    });
+    function renderBreakdowns(){
+      qsa("[data-breakdown]").forEach(node=>{
+        const pid = node.dataset.breakdown;
+        const isOpen = pid === expandedPlayer;
+        node.classList.toggle("open", isOpen);
+        if(isOpen){
+          const s = roundData && roundData.scores && roundData.scores[pid];
+          if(!s){ node.innerHTML = `<div class="muted small">ما فيه بيانات لهذه الجولة</div>`; return; }
+          node.innerHTML = CATEGORIES.map(cat=>{
+            const c = s.perCategory[cat.key] || {answer:"", points:0};
+            const cls = c.points===10?"p10":c.points===5?"p5":"p0";
+            return `<div class="breakdown-row"><span>${cat.emoji} ${c.answer||"—"}</span><span class="pts ${cls}">${c.points >= 0 ? "+"+c.points : c.points}</span></div>`;
+          }).join("");
+        }
+      });
+    }
+    if(isHost) qs("#newRoundBtn").addEventListener("click", startRound);
+    qs("#leaveBtn2").addEventListener("click", leaveRoom);
+  }
+
+  // ---------------- boot ----------------
+  calibrateClock();
+  render();
+})();
+</script>
+</body>
+</html>
