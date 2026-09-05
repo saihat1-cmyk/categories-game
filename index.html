@@ -324,7 +324,7 @@
   async function toggleReady(){
     for(let attempt=0; attempt<4; attempt++){
       try{
-        await dbPatch(`${GAME_PATH}/rooms/${roomCode}/ready/${playerId}`, true);
+        await dbPut(`${GAME_PATH}/rooms/${roomCode}/ready/${playerId}`, true);
         return true;
       }catch(e){
         await new Promise(r=>setTimeout(r, 500 + attempt*500));
