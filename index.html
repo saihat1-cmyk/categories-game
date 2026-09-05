@@ -163,6 +163,7 @@
   let localAnswers = {}; // buffered local edits (playerId is always me here)
   let saveTimers = {};
   let errorBanner = null;
+  let visibilityListenerAdded = false;
 
   // ---------------- helpers ----------------
   function el(html){
@@ -404,21 +405,22 @@
   }
 
   // ---------------- polling ----------------
+  async function pollOnce(){
+    try{
+      const data = await dbGet(`${GAME_PATH}/rooms/${roomCode}`);
+      if(!data){ showToast("انتهت الغرفة أو تم حذفها"); leaveRoom(); return; }
+      room = data;
+      isHost = (room.hostId === playerId);
+      if(screen !== "playing" || room.state !== "playing"){
+        screen = room.state || "lobby";
+      }
+      errorBanner = null;
+      render();
+    }catch(e){ errorBanner = "تعذّر الاتصال بالخادم — بيعاد المحاولة تلقائيًا"; render(); }
+  }
   function startPolling(){
     stopPolling();
-    pollTimer = setInterval(async ()=>{
-      try{
-        const data = await dbGet(`${GAME_PATH}/rooms/${roomCode}`);
-        if(!data){ showToast("انتهت الغرفة أو تم حذفها"); leaveRoom(); return; }
-        room = data;
-        isHost = (room.hostId === playerId);
-        if(screen !== "playing" || room.state !== "playing"){
-          screen = room.state || "lobby";
-        }
-        errorBanner = null;
-        render();
-      }catch(e){ errorBanner = "تعذّر الاتصال بالخادم — بيعاد المحاولة تلقائيًا"; render(); }
-    }, 1200);
+    pollTimer = setInterval(pollOnce, 1200);
 
     tickTimer = setInterval(()=>{
       if(room && room.state === "playing"){
@@ -426,6 +428,13 @@
         checkAutoEnd();
       }
     }, 500);
+
+    if(!visibilityListenerAdded){
+      visibilityListenerAdded = true;
+      document.addEventListener("visibilitychange", ()=>{
+        if(document.visibilityState === "visible" && roomCode){ pollOnce(); }
+      });
+    }
   }
   function stopPolling(){
     if(pollTimer) clearInterval(pollTimer);
@@ -601,9 +610,11 @@
         <div style="margin-top:18px;">
           <button class="btn btn-primary" id="readyBtn">أنا خلصت ✅</button>
           <div class="ready-count" id="readyCount">${readyCount} من ${players.length} جاهزين</div>
+          <button class="btn btn-sm btn-outline" id="refreshBtn" style="margin-top:10px;">تحديث 🔄</button>
           <div id="debugInfo" style="font-size:10px; color:var(--text-dim); text-align:center; margin-top:10px; direction:ltr; word-break:break-word;"></div>
         </div>
       `;
+      qs("#refreshBtn").addEventListener("click", pollOnce);
       const catList = qs("#catList");
       CATEGORIES.forEach(cat=>{
         const row = el(`
