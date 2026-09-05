@@ -743,6 +743,12 @@
   }
 
   // ---------------- boot ----------------
+  window.addEventListener("error", (e)=>{
+    showToast("خطأ برمجي: " + (e.message||"غير معروف"), 9000);
+  });
+  window.addEventListener("unhandledrejection", (e)=>{
+    showToast("خطأ غير متوقع: " + (e.reason && e.reason.message ? e.reason.message : String(e.reason)), 9000);
+  });
   calibrateClock();
   render();
 })();
