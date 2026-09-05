@@ -200,14 +200,14 @@
   }
   async function dbPatch(path, body){
     const res = await fetch(`${DB_URL}${path}.json`, {
-      method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)
+      method:"PATCH", body: JSON.stringify(body)
     });
     if(!res.ok) throw new Error("write_failed");
     return res.json();
   }
   async function dbPut(path, body){
     const res = await fetch(`${DB_URL}${path}.json`, {
-      method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)
+      method:"PUT", body: JSON.stringify(body)
     });
     if(!res.ok) throw new Error("write_failed");
     return res.json();
