@@ -174,6 +174,7 @@
   let audioCtx = null;
   let lastWarnSecond = null;
   let endBeepPlayed = false;
+  let chatOpen = false;
 
   // ---------------- audio ----------------
   function ensureAudio(){
@@ -271,6 +272,11 @@
     const res = await fetchWithTimeout(`${DB_URL}${path}.json`, { method:"DELETE" });
     if(!res.ok){ const t = await res.text().catch(()=> ""); throw new Error(`DELETE ${res.status}: ${t}`); }
     return res.json();
+  }
+  async function dbPost(path, body){
+    const res = await fetchWithTimeout(`${DB_URL}${path}.json`, { method:"POST", body: JSON.stringify(body) });
+    if(!res.ok){ const t = await res.text().catch(()=> ""); throw new Error(`POST ${res.status}: ${t}`); }
+    return res.json(); // { name: "-generatedPushId" }
   }
 
   async function calibrateClock(){
@@ -499,6 +505,7 @@
       if(prevScreen !== "finished" && screen === "finished"){ playCelebrationSound(); }
       errorBanner = null;
       render();
+      if(chatOpen) renderChatMessages();
     }catch(e){ errorBanner = "تعذّر الاتصال بالخادم — بيعاد المحاولة تلقائيًا"; render(); }
   }
   function startPolling(){
@@ -563,9 +570,87 @@
 
   function showError(){ showToast("صار خطأ بالاتصال، جرّب مرة ثانية 🙏"); }
 
+  // ---------------- chat ----------------
+  async function sendChatMessage(text){
+    if(!text || !text.trim() || !roomCode) return;
+    try{
+      await dbPost(`${GAME_PATH}/rooms/${roomCode}/chat`, { pid: playerId, name: playerName, text: text.trim(), ts: {".sv":"timestamp"} });
+    }catch(e){ showToast("تعذّر إرسال الرسالة، جرب مرة ثانية 🙏"); }
+  }
+  function renderChatMessages(){
+    const container = qs("#chatMessages");
+    if(!container || !room) return;
+    const msgs = Object.entries(room.chat||{}).sort((a,b)=> a[0] < b[0] ? -1 : (a[0] > b[0] ? 1 : 0));
+    if(msgs.length === 0){
+      container.innerHTML = `<div class="muted small center" style="margin-top:20px;">ما فيه رسائل بعد، ابدأ الدردشة 👋</div>`;
+      return;
+    }
+    container.innerHTML = msgs.map(([id,m])=>{
+      const mine = m.pid === playerId;
+      return `<div style="align-self:${mine?'flex-end':'flex-start'}; max-width:80%; background:${mine?'var(--accent)':'var(--surface-2)'}; color:${mine?'#1B1206':'var(--text)'}; padding:8px 12px; border-radius:14px; font-size:14px; word-break:break-word;">
+        ${!mine ? `<div style="font-size:11px; opacity:.75; margin-bottom:2px; font-weight:700;">${m.name||""}</div>` : ``}
+        <div>${m.text}</div>
+      </div>`;
+    }).join("");
+    container.scrollTop = container.scrollHeight;
+  }
+  function closeChatOverlay(){
+    const o = qs("#chatOverlay"); if(o) o.remove();
+  }
+  function openChatOverlay(){
+    if(qs("#chatOverlay")) return;
+    const overlay = el(`
+      <div class="modal-overlay" id="chatOverlay">
+        <div class="modal-card" style="display:flex; flex-direction:column; height:66vh; padding-bottom:14px;">
+          <div class="row" style="margin-bottom:10px;">
+            <div style="font-weight:800; font-size:16px;">💬 الدردشة</div>
+            <div class="spacer"></div>
+            <button class="modal-close" id="closeChat">✕</button>
+          </div>
+          <div id="chatMessages" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-bottom:8px;"></div>
+          <div class="row" style="gap:8px;">
+            <input type="text" id="chatInput" placeholder="اكتب رسالة..." maxlength="300" style="flex:1; padding:12px 14px; border-radius:12px; border:2px solid var(--border); background:var(--surface-2); color:var(--text); font-size:15px; outline:none;">
+            <button class="btn btn-sm btn-primary" id="chatSendBtn">إرسال</button>
+          </div>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(overlay);
+    qs("#closeChat").addEventListener("click", ()=>{ chatOpen = false; closeChatOverlay(); });
+    renderChatMessages();
+    const input = qs("#chatInput");
+    const doSend = async ()=>{
+      const val = input.value.trim();
+      if(!val) return;
+      input.value = "";
+      await sendChatMessage(val);
+      renderChatMessages();
+    };
+    qs("#chatSendBtn").addEventListener("click", doSend);
+    input.addEventListener("keydown", (e)=>{ if(e.key === "Enter"){ e.preventDefault(); doSend(); } });
+  }
+  function toggleChat(){
+    unlockAudio();
+    chatOpen = !chatOpen;
+    if(chatOpen) openChatOverlay(); else closeChatOverlay();
+  }
+  function ensureChatFab(){
+    if(!roomCode){
+      const b = qs("#chatFab"); if(b) b.remove();
+      closeChatOverlay(); chatOpen = false;
+      return;
+    }
+    if(qs("#chatFab")) return;
+    const fab = el(`<button id="chatFab" style="position:fixed; bottom:22px; left:20px; width:54px; height:54px; border-radius:50%; background:var(--accent); color:#1B1206; font-size:24px; box-shadow:0 6px 18px rgba(0,0,0,.35); z-index:65; border:none;">💬</button>`);
+    fab.addEventListener("click", toggleChat);
+    document.body.appendChild(fab);
+  }
+
+
   // ---------------- rendering ----------------
   function render(){
     const app = qs("#app");
+    ensureChatFab();
     if(screen === "home") return renderHome(app);
     if(screen === "lobby") return renderLobby(app);
     if(screen === "playing") return renderPlaying(app);
