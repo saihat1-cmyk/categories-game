@@ -322,12 +322,17 @@
   }
 
   async function toggleReady(){
-    const amReady = room && room.ready && room.ready[playerId];
-    try{
-      await dbPatch(`${GAME_PATH}/rooms/${roomCode}/ready/${playerId}`, true); // set true; unset not needed for v1
-      if(!amReady){ /* no-op */ }
-    }catch(e){ showError(); }
+    for(let attempt=0; attempt<4; attempt++){
+      try{
+        await dbPatch(`${GAME_PATH}/rooms/${roomCode}/ready/${playerId}`, true);
+        return true;
+      }catch(e){
+        await new Promise(r=>setTimeout(r, 500 + attempt*500));
+      }
+    }
+    return false;
   }
+
 
   function computeScores(roomData){
     const players = Object.keys(roomData.players||{});
@@ -586,9 +591,17 @@
         });
       });
       qs("#readyBtn").addEventListener("click", async ()=>{
-        qs("#readyBtn").disabled = true;
-        qs("#readyBtn").textContent = "بانتظار الباقي...";
-        await toggleReady();
+        const btn = qs("#readyBtn");
+        btn.disabled = true;
+        btn.textContent = "جاري الإرسال...";
+        const ok = await toggleReady();
+        if(ok){
+          btn.textContent = "بانتظار الباقي...";
+        }else{
+          btn.disabled = false;
+          btn.textContent = "أنا خلصت ✅ (اضغط مرة ثانية)";
+          showToast("تعذّر الإرسال، جرب تضغط الزر مرة ثانية 🙏");
+        }
       });
       updateTimerUI();
     } else {
