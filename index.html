@@ -381,23 +381,22 @@
   }
 
   async function finalizeRound(){
+    if(!room || room.state !== "playing"){
+      lastFinalizeInfo = "تخطي: الحالة المحلية مو playing";
+      return;
+    }
+    const roundNum = room.roundNumber;
+    const letter = room.currentLetter;
+    const scores = computeScores(room);
     try{
-      const fresh = await dbGet(`${GAME_PATH}/rooms/${roomCode}`);
-      if(!fresh || fresh.state !== "playing"){
-        lastFinalizeInfo = "توقف: الغرفة مو بحالة playing عند التحقق (" + (fresh ? fresh.state : "لا توجد غرفة") + ")";
-        // someone else already finished it — apply that fresh state locally right now
-        if(fresh){ room = fresh; screen = fresh.state || "lobby"; render(); }
-        return;
-      }
-      const scores = computeScores(fresh);
       await dbPatch(`${GAME_PATH}/rooms/${roomCode}`, {
         state: "results",
-        [`rounds/${fresh.roundNumber}`]: { letter: fresh.currentLetter, scores }
+        [`rounds/${roundNum}`]: { letter, scores }
       });
       lastFinalizeInfo = "نجح الإنهاء ✅";
-      // apply the new state locally immediately instead of waiting for the next poll
-      const updated = await dbGet(`${GAME_PATH}/rooms/${roomCode}`);
-      if(updated){ room = updated; screen = updated.state || "lobby"; render(); }
+      room = { ...room, state: "results", rounds: { ...(room.rounds||{}), [roundNum]: { letter, scores } } };
+      screen = "results";
+      render();
     }catch(e){
       lastFinalizeInfo = "فشل: " + e.message;
       console.error("finalizeRound failed:", e);
