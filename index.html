@@ -113,13 +113,19 @@
     font-family:'Cairo',sans-serif; font-weight:900; font-size:14px; flex-shrink:0;
   }
   .rank-num.gold{background:var(--accent); color:#1B1206;}
-  .breakdown{margin-top:12px; border-top:1px solid var(--border); padding-top:10px; display:none;}
-  .breakdown.open{display:block;}
-  .breakdown-row{display:flex; justify-content:space-between; padding:6px 0; font-size:13.5px; border-bottom:1px solid rgba(255,255,255,.05);}
   .pts{font-weight:900; font-family:'Cairo',sans-serif;}
   .pts.p10{color:var(--good);}
   .pts.p5{color:var(--shared);}
   .pts.p0{color:var(--zero);}
+
+  .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:flex-end; justify-content:center; z-index:70;}
+  .modal-card{background:var(--surface); width:100%; max-width:480px; border-radius:24px 24px 0 0; padding:20px 18px 30px; max-height:78vh; overflow-y:auto;}
+  .modal-close{width:32px; height:32px; border-radius:50%; background:var(--surface-2); color:var(--text); font-size:16px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .breakdown-item{padding:10px 0; border-bottom:1px solid rgba(255,255,255,.06);}
+  .breakdown-item-top{display:flex; justify-content:space-between; align-items:center; gap:10px;}
+  .edit-pts{display:flex; gap:6px; margin-top:8px;}
+  .edit-pts button{flex:1; padding:7px; border-radius:9px; background:var(--surface-2); color:var(--text-dim); font-size:12px; font-weight:700;}
+  .edit-pts button.active{background:var(--accent); color:#1B1206;}
 
   .banner{background:var(--surface-2); border-right:4px solid var(--urgent); border-radius:10px; padding:12px 14px; font-size:13.5px; color:var(--text);}
   .toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--surface-3); color:var(--text); padding:12px 20px; border-radius:14px; font-size:14px; box-shadow:0 6px 20px rgba(0,0,0,.35); z-index:50;}
@@ -164,6 +170,41 @@
   let saveTimers = {};
   let errorBanner = null;
   let visibilityListenerAdded = false;
+  let selectedDuration = 90;
+  let audioCtx = null;
+  let lastWarnSecond = null;
+  let endBeepPlayed = false;
+
+  // ---------------- audio ----------------
+  function ensureAudio(){
+    if(!audioCtx){
+      try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ audioCtx = null; }
+    }
+    return audioCtx;
+  }
+  function unlockAudio(){
+    const ctx = ensureAudio();
+    if(ctx && ctx.state === "suspended"){ ctx.resume().catch(()=>{}); }
+  }
+  function beep(freq, dur, vol){
+    const ctx = ensureAudio(); if(!ctx) return;
+    try{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      osc.type = "sine";
+      gain.gain.value = vol||0.18;
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+      osc.stop(ctx.currentTime + dur);
+    }catch(e){}
+  }
+  function playWarningBeep(){ beep(920, 0.14, 0.22); }
+  function playEndBeep(){ beep(260, 0.35, 0.25); setTimeout(()=>beep(180, 0.4, 0.25), 160); }
+  function playCelebrationSound(){
+    [440,554,659,880,1046].forEach((f,i)=> setTimeout(()=>beep(f, 0.28, 0.2), i*130));
+  }
 
   // ---------------- helpers ----------------
   function el(html){
@@ -299,7 +340,7 @@
   async function leaveRoom(){
     stopPolling();
     try{ await dbDelete(`${GAME_PATH}/rooms/${roomCode}/players/${playerId}`); }catch(e){}
-    roomCode = null; room = null; isHost = false; screen = "home"; renderedRoundKey = null;
+    roomCode = null; room = null; isHost = false; screen = "home"; renderedRoundKey = null; expandedPlayer = null;
     render();
   }
 
@@ -317,6 +358,7 @@
         state:"playing",
         currentLetter: letter,
         roundNumber: nextRound,
+        roundDuration: selectedDuration,
         roundStartTime: {".sv":"timestamp"},
         answers: null,
         ready: null
@@ -400,16 +442,61 @@
     }
   }
 
+  async function overridePoints(pid, catKey, newPoints){
+    if(!isHost || !room) return;
+    const roundKey = "r" + room.roundNumber;
+    const roundData = room.rounds && room.rounds[roundKey];
+    if(!roundData || !roundData.scores || !roundData.scores[pid]) return;
+    const s = roundData.scores[pid];
+    const updatedPerCategory = { ...s.perCategory, [catKey]: { ...s.perCategory[catKey], points: newPoints } };
+    const newTotal = Object.values(updatedPerCategory).reduce((sum,c)=> sum + (c.points||0), 0);
+    const updatedPlayerScore = { perCategory: updatedPerCategory, total: newTotal };
+    try{
+      await dbPatch(`${GAME_PATH}/rooms/${roomCode}/rounds/${roundKey}/scores/${pid}`, updatedPlayerScore);
+      room = { ...room, rounds: { ...room.rounds, [roundKey]: { ...roundData, scores: { ...roundData.scores, [pid]: updatedPlayerScore } } } };
+      render();
+    }catch(e){ showToast("تعذّر حفظ التعديل، جرب مرة ثانية 🙏"); }
+  }
+
+  function computeTotals(roomData){
+    const players = Object.entries(roomData.players||{});
+    const totals = {};
+    players.forEach(([pid])=> totals[pid] = 0);
+    Object.values(roomData.rounds||{}).filter(Boolean).forEach(r=>{
+      Object.entries(r.scores||{}).forEach(([pid, s])=>{
+        if(totals[pid] === undefined) totals[pid] = 0;
+        totals[pid] += s.total;
+      });
+    });
+    return players.map(([pid,p])=>({pid, name:p.name, total: totals[pid]||0}))
+      .sort((a,b)=> b.total - a.total);
+  }
+
+  async function endGame(){
+    if(!room) return;
+    const ranked = computeTotals(room);
+    const winnerId = ranked.length ? ranked[0].pid : null;
+    try{
+      await dbPatch(`${GAME_PATH}/rooms/${roomCode}`, { state:"finished", winnerId });
+      room = { ...room, state:"finished", winnerId };
+      screen = "finished";
+      playCelebrationSound();
+      render();
+    }catch(e){ showError(); }
+  }
+
   // ---------------- polling ----------------
   async function pollOnce(){
     try{
       const data = await dbGet(`${GAME_PATH}/rooms/${roomCode}`);
       if(!data){ showToast("انتهت الغرفة أو تم حذفها"); leaveRoom(); return; }
+      const prevScreen = screen;
       room = data;
       isHost = (room.hostId === playerId);
       if(screen !== "playing" || room.state !== "playing"){
         screen = room.state || "lobby";
       }
+      if(prevScreen !== "finished" && screen === "finished"){ playCelebrationSound(); }
       errorBanner = null;
       render();
     }catch(e){ errorBanner = "تعذّر الاتصال بالخادم — بيعاد المحاولة تلقائيًا"; render(); }
@@ -463,6 +550,15 @@
       fill.style.background = remaining <= 15 ? "var(--urgent)" : "var(--good)";
     }
     if(label){ label.textContent = Math.ceil(remaining) + " ث"; }
+    const intRemaining = Math.ceil(remaining);
+    if(intRemaining <= 5 && intRemaining >= 1 && intRemaining !== lastWarnSecond){
+      lastWarnSecond = intRemaining;
+      playWarningBeep();
+    }
+    if(remaining <= 0 && !endBeepPlayed){
+      endBeepPlayed = true;
+      playEndBeep();
+    }
   }
 
   function showError(){ showToast("صار خطأ بالاتصال، جرّب مرة ثانية 🙏"); }
@@ -474,6 +570,7 @@
     if(screen === "lobby") return renderLobby(app);
     if(screen === "playing") return renderPlaying(app);
     if(screen === "results") return renderResults(app);
+    if(screen === "finished") return renderFinished(app);
   }
 
   function renderHome(app){
@@ -511,6 +608,7 @@
         `;
       }
       qs("#goBtn").addEventListener("click", async ()=>{
+        unlockAudio();
         const name = qs("#nameInput").value.trim();
         if(!name){ showToast("اكتب اسمك أول 🙂"); return; }
         if(mode === "create"){
@@ -536,6 +634,22 @@
     }
   }
 
+  function durationPickerHTML(){
+    return `
+      <div class="row" style="gap:8px; margin-bottom:12px;">
+        ${[30,60,90].map(d=>`<button class="btn-sm ${selectedDuration===d?'btn-primary':'btn-outline'}" data-dur="${d}" style="flex:1; text-align:center;">${d} ث</button>`).join("")}
+      </div>
+    `;
+  }
+  function wireDurationPicker(){
+    qsa("[data-dur]").forEach(b=>{
+      b.addEventListener("click", ()=>{
+        selectedDuration = parseInt(b.dataset.dur);
+        render();
+      });
+    });
+  }
+
   function renderLobby(app){
     if(!room) return;
     const players = Object.entries(room.players||{});
@@ -548,9 +662,11 @@
       <div class="stack" id="playersList"></div>
       <div style="flex:1"></div>
       <div class="stack" style="margin-top:20px;">
-        ${isHost
-          ? `<button class="btn btn-primary" id="startBtn">${players.length < 2 ? "ابدأ اللعبة (يفضّل لاعبين أو أكثر)" : "ابدأ اللعبة 🎬"}</button>`
-          : `<div class="center muted small">بانتظار المضيف يبدأ اللعبة...</div>`}
+        ${isHost ? `
+          <div class="muted small" style="margin-bottom:6px;">مدة الجولة</div>
+          ${durationPickerHTML()}
+          <button class="btn btn-primary" id="startBtn">${players.length < 2 ? "ابدأ اللعبة (يفضّل لاعبين أو أكثر)" : "ابدأ اللعبة 🎬"}</button>
+        ` : `<div class="center muted small">بانتظار المضيف يبدأ اللعبة...</div>`}
         <button class="btn btn-danger-outline" id="leaveBtn">مغادرة الغرفة</button>
       </div>
       ${errorBanner ? `<div class="banner" style="margin-top:14px;">${errorBanner}</div>` : ""}
@@ -570,7 +686,10 @@
       navigator.clipboard && navigator.clipboard.writeText(roomCode);
       showToast("انسخ الكود وأرسله 📋");
     });
-    if(isHost) qs("#startBtn").addEventListener("click", startRound);
+    if(isHost){
+      wireDurationPicker();
+      qs("#startBtn").addEventListener("click", ()=>{ unlockAudio(); startRound(); });
+    }
     qs("#leaveBtn").addEventListener("click", leaveRoom);
   }
 
@@ -581,6 +700,8 @@
       renderedRoundKey = roundKey;
       localAnswers = {};
       expandedPlayer = null;
+      lastWarnSecond = null;
+      endBeepPlayed = false;
       const players = Object.keys(room.players||{});
       const readyCount = room.ready ? Object.keys(room.ready).length : 0;
 
@@ -622,6 +743,7 @@
         });
       });
       qs("#readyBtn").addEventListener("click", async ()=>{
+        unlockAudio();
         const btn = qs("#readyBtn");
         btn.disabled = true;
         btn.textContent = "جاري الإرسال...";
@@ -652,18 +774,7 @@
     if(!room) return;
     const roundData = room.rounds ? room.rounds["r" + room.roundNumber] : null;
     const players = Object.entries(room.players||{});
-
-    // cumulative totals across all finished rounds
-    const totals = {};
-    players.forEach(([pid])=> totals[pid] = 0);
-    Object.values(room.rounds||{}).filter(Boolean).forEach(r=>{
-      Object.entries(r.scores||{}).forEach(([pid, s])=>{
-        if(totals[pid] === undefined) totals[pid] = 0;
-        totals[pid] += s.total;
-      });
-    });
-    const ranked = players.map(([pid,p])=>({pid, name:p.name, total: totals[pid]||0}))
-      .sort((a,b)=> b.total - a.total);
+    const ranked = computeTotals(room);
 
     app.innerHTML = `
       <div class="top-bar">
@@ -673,10 +784,13 @@
       </div>
       <div class="stack" id="rankList"></div>
       <div style="margin-top:22px;">
-        ${isHost
-          ? `<button class="btn btn-primary" id="newRoundBtn">جولة جديدة 🔄</button>`
-          : `<div class="center muted small">بانتظار المضيف يبدأ جولة جديدة...</div>`}
-        <button class="btn btn-outline" id="leaveBtn2" style="margin-top:10px;">مغادرة الغرفة</button>
+        ${isHost ? `
+          <div class="muted small" style="margin-bottom:6px;">مدة الجولة الجاية</div>
+          ${durationPickerHTML()}
+          <button class="btn btn-primary" id="newRoundBtn">جولة جديدة 🔄</button>
+          <button class="btn btn-outline" id="endGameBtn" style="margin-top:10px;">إنهاء اللعبة وإعلان الفائز 🏁</button>
+        ` : `<div class="center muted small">بانتظار المضيف يبدأ جولة جديدة...</div>`}
+        <button class="btn btn-danger-outline" id="leaveBtn2" style="margin-top:10px;">مغادرة الغرفة</button>
       </div>
     `;
     const list = qs("#rankList");
@@ -696,33 +810,128 @@
               <div class="muted small">الإجمالي</div>
             </div>
           </div>
-          <div class="breakdown" data-breakdown="${r.pid}"></div>
         </div>
       `);
       card.addEventListener("click", ()=>{
         expandedPlayer = expandedPlayer === r.pid ? null : r.pid;
-        renderBreakdowns();
+        render();
       });
       list.appendChild(card);
     });
-    function renderBreakdowns(){
-      qsa("[data-breakdown]").forEach(node=>{
-        const pid = node.dataset.breakdown;
-        const isOpen = pid === expandedPlayer;
-        node.classList.toggle("open", isOpen);
-        if(isOpen){
-          const s = roundData && roundData.scores && roundData.scores[pid];
-          if(!s){ node.innerHTML = `<div class="muted small">ما فيه بيانات لهذه الجولة</div>`; return; }
-          node.innerHTML = CATEGORIES.map(cat=>{
+
+    if(isHost){
+      wireDurationPicker();
+      qs("#newRoundBtn").addEventListener("click", ()=>{ unlockAudio(); startRound(); });
+      qs("#endGameBtn").addEventListener("click", ()=>{ unlockAudio(); endGame(); });
+    }
+    qs("#leaveBtn2").addEventListener("click", leaveRoom);
+
+    // persistent detail modal — stays open across re-renders until explicitly closed
+    if(expandedPlayer){
+      const p = room.players && room.players[expandedPlayer];
+      if(!p){
+        expandedPlayer = null;
+      }else{
+        const s = roundData && roundData.scores && roundData.scores[expandedPlayer];
+        const overlay = el(`
+          <div class="modal-overlay" id="detailOverlay">
+            <div class="modal-card">
+              <div class="row" style="margin-bottom:14px;">
+                <div style="font-weight:800; font-size:16px;">${p.name}</div>
+                <div class="spacer"></div>
+                <button class="modal-close" id="closeDetail">✕</button>
+              </div>
+              <div id="detailBody"></div>
+            </div>
+          </div>
+        `);
+        app.appendChild(overlay);
+        const body = qs("#detailBody");
+        if(!s){
+          body.innerHTML = `<div class="muted small">ما فيه بيانات لهذه الجولة</div>`;
+        }else{
+          CATEGORIES.forEach(cat=>{
             const c = s.perCategory[cat.key] || {answer:"", points:0};
             const cls = c.points===10?"p10":c.points===5?"p5":"p0";
-            return `<div class="breakdown-row"><span>${cat.emoji} ${c.answer||"—"}</span><span class="pts ${cls}">${c.points >= 0 ? "+"+c.points : c.points}</span></div>`;
-          }).join("");
+            const item = el(`
+              <div class="breakdown-item">
+                <div class="breakdown-item-top">
+                  <span>${cat.emoji} ${c.answer||"—"}</span>
+                  <span class="pts ${cls}">+${c.points}</span>
+                </div>
+                ${isHost ? `<div class="edit-pts" data-cat="${cat.key}">
+                  <button data-val="0" class="${c.points===0?'active':''}">0</button>
+                  <button data-val="5" class="${c.points===5?'active':''}">5</button>
+                  <button data-val="10" class="${c.points===10?'active':''}">10</button>
+                </div>` : ``}
+              </div>
+            `);
+            body.appendChild(item);
+          });
+          if(isHost){
+            qsa(".edit-pts button", body).forEach(btn=>{
+              btn.addEventListener("click", ()=>{
+                const catKey = btn.parentElement.dataset.cat;
+                overridePoints(expandedPlayer, catKey, parseInt(btn.dataset.val));
+              });
+            });
+          }
         }
+        qs("#closeDetail").addEventListener("click", ()=>{ expandedPlayer = null; render(); });
+      }
+    }
+  }
+
+  function renderFinished(app){
+    if(!room) return;
+    const ranked = computeTotals(room);
+    const winner = ranked[0];
+    app.innerHTML = `
+      <div class="center" style="margin:34px 0 10px;">
+        <div style="font-size:64px;">🏆</div>
+        <div style="font-family:'Cairo',sans-serif; font-weight:900; font-size:20px; margin-top:8px;">الفائز هو</div>
+        <div style="font-family:'Cairo',sans-serif; font-weight:900; font-size:30px; color:var(--accent); margin-top:6px;">${winner ? winner.name : "—"}</div>
+      </div>
+      <div class="stack" id="finalList" style="margin-top:14px;"></div>
+      <div style="margin-top:24px;">
+        ${isHost ? `
+          <button class="btn btn-primary" id="playAgainBtn">لعب من جديد 🔄</button>
+          <button class="btn btn-outline" id="backToLobbyBtn" style="margin-top:10px;">العودة للغرفة</button>
+        ` : `<div class="center muted small">بانتظار المضيف...</div>`}
+        <button class="btn btn-danger-outline" id="leaveBtn3" style="margin-top:10px;">مغادرة الغرفة</button>
+      </div>
+    `;
+    const list = qs("#finalList");
+    ranked.forEach((r, idx)=>{
+      list.appendChild(el(`
+        <div class="rank-card ${idx===0?'first':''}">
+          <div class="row">
+            <div class="rank-num ${idx===0?'gold':''}">${idx+1}</div>
+            <div style="font-weight:700;">${r.name}${r.pid===playerId?" (أنت)":""}</div>
+            <div class="spacer"></div>
+            <div class="pts p10" style="font-size:18px;">${r.total}</div>
+          </div>
+        </div>
+      `));
+    });
+    if(isHost){
+      qs("#playAgainBtn").addEventListener("click", async ()=>{
+        unlockAudio();
+        try{
+          await dbPatch(`${GAME_PATH}/rooms/${roomCode}`, { state:"lobby", rounds: null, roundNumber: 0, currentLetter: null, winnerId: null });
+          room = { ...room, state:"lobby", rounds:{}, roundNumber:0, currentLetter:null, winnerId:null };
+          screen = "lobby"; render();
+        }catch(e){ showError(); }
+      });
+      qs("#backToLobbyBtn").addEventListener("click", async ()=>{
+        try{
+          await dbPatch(`${GAME_PATH}/rooms/${roomCode}`, { state:"lobby" });
+          room = { ...room, state:"lobby" };
+          screen = "lobby"; render();
+        }catch(e){ showError(); }
       });
     }
-    if(isHost) qs("#newRoundBtn").addEventListener("click", startRound);
-    qs("#leaveBtn2").addEventListener("click", leaveRoom);
+    qs("#leaveBtn3").addEventListener("click", leaveRoom);
   }
 
   // ---------------- boot ----------------
