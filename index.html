@@ -206,7 +206,8 @@
     }
   }
   async function dbGet(path){
-    const res = await fetchWithTimeout(`${DB_URL}${path}.json`);
+    const bust = `_=${Date.now()}${Math.random().toString(36).slice(2,6)}`;
+    const res = await fetchWithTimeout(`${DB_URL}${path}.json?${bust}`, { cache: "no-store" });
     if(!res.ok){ const t = await res.text().catch(()=> ""); throw new Error(`GET ${res.status}: ${t}`); }
     return res.json();
   }
