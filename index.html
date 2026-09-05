@@ -382,24 +382,20 @@
   }
 
   async function finalizeRound(){
-    if(!room || room.state !== "playing"){
-      lastFinalizeInfo = "تخطي: الحالة المحلية مو playing";
-      return;
-    }
+    if(!room || room.state !== "playing") return;
     const roundNum = room.roundNumber;
+    const roundKey = "r" + roundNum;
     const letter = room.currentLetter;
     const scores = computeScores(room);
     try{
       await dbPatch(`${GAME_PATH}/rooms/${roomCode}`, {
         state: "results",
-        [`rounds/${roundNum}`]: { letter, scores }
+        [`rounds/${roundKey}`]: { letter, scores }
       });
-      lastFinalizeInfo = "نجح الإنهاء ✅";
-      room = { ...room, state: "results", rounds: { ...(room.rounds||{}), [roundNum]: { letter, scores } } };
+      room = { ...room, state: "results", rounds: { ...(room.rounds||{}), [roundKey]: { letter, scores } } };
       screen = "results";
       render();
     }catch(e){
-      lastFinalizeInfo = "فشل: " + e.message;
       console.error("finalizeRound failed:", e);
     }
   }
@@ -443,29 +439,17 @@
   }
 
   let finalizeLock = false;
-  let debugTick = 0;
-  let lastFinalizeInfo = "لم تتم أي محاولة بعد";
   function checkAutoEnd(){
-    debugTick++;
-    if(!room || room.state !== "playing" || !room.roundStartTime){
-      updateDebugInfo("متوقف: room/state/roundStartTime غير جاهز");
-      return;
-    }
+    if(!room || room.state !== "playing" || !room.roundStartTime) return;
     const elapsed = (nowServer() - room.roundStartTime)/1000;
     const remaining = room.roundDuration - elapsed;
     const players = Object.keys(room.players||{});
     const readyCount = room.ready ? Object.keys(room.ready).length : 0;
     const allReady = players.length > 0 && readyCount >= players.length;
-    updateDebugInfo(`تك #${debugTick} | باقي:${remaining.toFixed(1)} | جاهزين:${readyCount}/${players.length} | قفل:${finalizeLock} | ${lastFinalizeInfo}`);
     if((remaining <= 0 || allReady) && !finalizeLock){
       finalizeLock = true;
-      lastFinalizeInfo = "جاري إنهاء الجولة الآن...";
       finalizeRound().finally(()=>{ setTimeout(()=>finalizeLock=false, 3000); });
     }
-  }
-  function updateDebugInfo(text){
-    const el = qs("#debugInfo");
-    if(el) el.textContent = text;
   }
   function updateTimerUI(){
     if(!room || !room.roundStartTime) return;
@@ -611,7 +595,6 @@
           <button class="btn btn-primary" id="readyBtn">أنا خلصت ✅</button>
           <div class="ready-count" id="readyCount">${readyCount} من ${players.length} جاهزين</div>
           <button class="btn btn-sm btn-outline" id="refreshBtn" style="margin-top:10px;">تحديث 🔄</button>
-          <div id="debugInfo" style="font-size:10px; color:var(--text-dim); text-align:center; margin-top:10px; direction:ltr; word-break:break-word;"></div>
         </div>
       `;
       qs("#refreshBtn").addEventListener("click", pollOnce);
@@ -667,13 +650,13 @@
 
   function renderResults(app){
     if(!room) return;
-    const roundData = room.rounds ? room.rounds[room.roundNumber] : null;
+    const roundData = room.rounds ? room.rounds["r" + room.roundNumber] : null;
     const players = Object.entries(room.players||{});
 
     // cumulative totals across all finished rounds
     const totals = {};
     players.forEach(([pid])=> totals[pid] = 0);
-    Object.values(room.rounds||{}).forEach(r=>{
+    Object.values(room.rounds||{}).filter(Boolean).forEach(r=>{
       Object.entries(r.scores||{}).forEach(([pid, s])=>{
         if(totals[pid] === undefined) totals[pid] = 0;
         totals[pid] += s.total;
