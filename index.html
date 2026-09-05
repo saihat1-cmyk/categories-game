@@ -195,26 +195,26 @@
 
   async function dbGet(path){
     const res = await fetch(`${DB_URL}${path}.json`);
-    if(!res.ok) throw new Error("read_failed");
+    if(!res.ok){ const t = await res.text().catch(()=> ""); throw new Error(`GET ${res.status}: ${t}`); }
     return res.json();
   }
   async function dbPatch(path, body){
     const res = await fetch(`${DB_URL}${path}.json`, {
       method:"PATCH", body: JSON.stringify(body)
     });
-    if(!res.ok) throw new Error("write_failed");
+    if(!res.ok){ const t = await res.text().catch(()=> ""); throw new Error(`PATCH ${res.status}: ${t}`); }
     return res.json();
   }
   async function dbPut(path, body){
     const res = await fetch(`${DB_URL}${path}.json`, {
       method:"PUT", body: JSON.stringify(body)
     });
-    if(!res.ok) throw new Error("write_failed");
+    if(!res.ok){ const t = await res.text().catch(()=> ""); throw new Error(`PUT ${res.status}: ${t}`); }
     return res.json();
   }
   async function dbDelete(path){
     const res = await fetch(`${DB_URL}${path}.json`, { method:"DELETE" });
-    if(!res.ok) throw new Error("write_failed");
+    if(!res.ok){ const t = await res.text().catch(()=> ""); throw new Error(`DELETE ${res.status}: ${t}`); }
     return res.json();
   }
 
@@ -376,7 +376,7 @@
         state: "results",
         [`rounds/${fresh.roundNumber}`]: { letter: fresh.currentLetter, scores }
       });
-    }catch(e){ /* another client likely already finalized */ }
+    }catch(e){ console.error("finalizeRound failed:", e); showToast("تشخيص: " + e.message, 6000); }
   }
 
   // ---------------- polling ----------------
