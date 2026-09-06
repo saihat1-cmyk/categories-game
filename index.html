@@ -210,6 +210,72 @@
   }
   function playChatPing(){ beep(700, 0.1, 0.16); setTimeout(()=>beep(900, 0.1, 0.14), 90); }
 
+  // ---------------- background music (procedural, generated locally — no external files) ----------------
+  let bgMusicPlaying = false;
+  let bgMusicMuted = false;
+  let bgMusicTimer = null;
+  let bgMusicStep = 0;
+  const BG_STEP_MS = 60000 / 128 / 2; // 128bpm, eighth notes — driving but not distracting
+  const BG_SCALE = [220.00, 246.94, 261.63, 293.66, 329.63, 392.00]; // A minor-ish, focused/tense feel
+  const BG_PATTERN = [0,null,2,null,3,null,2,null, 4,null,3,null,1,null,2,null];
+  function playBgNote(freq, dur, vol, type){
+    const ctx = ensureAudio(); if(!ctx) return;
+    try{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type || "triangle";
+      osc.frequency.value = freq;
+      gain.gain.value = 0;
+      osc.connect(gain); gain.connect(ctx.destination);
+      const now = ctx.currentTime;
+      gain.gain.linearRampToValueAtTime(vol, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      osc.start(now);
+      osc.stop(now + dur + 0.05);
+    }catch(e){}
+  }
+  function bgMusicTick(){
+    if(!bgMusicPlaying) return;
+    if(!bgMusicMuted){
+      const step = bgMusicStep % 16;
+      if(step % 8 === 0){ playBgNote(110, 0.4, 0.05, "sine"); } // subtle low pulse, keeps a steady beat
+      const idx = BG_PATTERN[step];
+      if(idx !== null){ playBgNote(BG_SCALE[idx], 0.3, 0.035, "triangle"); } // quiet melodic layer, stays under game sounds
+    }
+    bgMusicStep++;
+    bgMusicTimer = setTimeout(bgMusicTick, BG_STEP_MS);
+  }
+  function startBgMusic(){
+    if(bgMusicPlaying) return;
+    unlockAudio();
+    bgMusicPlaying = true;
+    bgMusicStep = 0;
+    bgMusicTick();
+  }
+  function stopBgMusic(){
+    bgMusicPlaying = false;
+    if(bgMusicTimer) clearTimeout(bgMusicTimer);
+    bgMusicTimer = null;
+  }
+  function syncBgMusic(){
+    const activeStates = ["playing","results"];
+    if(activeStates.includes(screen) && !bgMusicMuted){
+      startBgMusic();
+    }else{
+      stopBgMusic();
+    }
+  }
+  function toggleBgMusicMute(){
+    unlockAudio();
+    bgMusicMuted = !bgMusicMuted;
+    syncBgMusic();
+    updateMusicButton();
+  }
+  function updateMusicButton(){
+    const btn = qs("#musicToggleBtn");
+    if(btn) btn.textContent = bgMusicMuted ? "🔇" : "🎵";
+  }
+
   // ---------------- helpers ----------------
   function el(html){
     const t = document.createElement("template");
@@ -672,13 +738,22 @@
   function ensureChatFab(){
     if(!roomCode){
       const b = qs("#chatFab"); if(b) b.remove();
+      const m = qs("#musicToggleBtn"); if(m) m.remove();
       closeChatOverlay(); chatOpen = false;
+      stopBgMusic();
       return;
     }
-    if(qs("#chatFab")) return;
-    const fab = el(`<button id="chatFab" style="position:fixed; bottom:22px; left:20px; width:54px; height:54px; border-radius:50%; background:var(--accent); color:#1B1206; font-size:24px; box-shadow:0 6px 18px rgba(0,0,0,.35); z-index:65; border:none;">💬</button>`);
-    fab.addEventListener("click", toggleChat);
-    document.body.appendChild(fab);
+    if(!qs("#chatFab")){
+      const fab = el(`<button id="chatFab" style="position:fixed; bottom:22px; left:20px; width:54px; height:54px; border-radius:50%; background:var(--accent); color:#1B1206; font-size:24px; box-shadow:0 6px 18px rgba(0,0,0,.35); z-index:65; border:none;">💬</button>`);
+      fab.addEventListener("click", toggleChat);
+      document.body.appendChild(fab);
+    }
+    if(!qs("#musicToggleBtn")){
+      const mbtn = el(`<button id="musicToggleBtn" style="position:fixed; bottom:22px; right:20px; width:44px; height:44px; border-radius:50%; background:var(--surface-2); color:var(--text); font-size:19px; box-shadow:0 6px 18px rgba(0,0,0,.35); z-index:65; border:none;">${bgMusicMuted?"🔇":"🎵"}</button>`);
+      mbtn.addEventListener("click", toggleBgMusicMute);
+      document.body.appendChild(mbtn);
+    }
+    syncBgMusic();
   }
 
 
