@@ -191,6 +191,7 @@
   }
   function beep(freq, dur, vol){
     const ctx = ensureAudio(); if(!ctx) return;
+    if(ctx.state === "suspended"){ ctx.resume().catch(()=>{}); }
     try{
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -220,6 +221,7 @@
   const BG_PATTERN = [0,null,2,null,3,null,2,null, 4,null,3,null,1,null,2,null];
   function playBgNote(freq, dur, vol, type){
     const ctx = ensureAudio(); if(!ctx) return;
+    if(ctx.state === "suspended"){ ctx.resume().catch(()=>{}); }
     try{
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -599,6 +601,7 @@
     pollTimer = setInterval(pollOnce, 1200);
 
     tickTimer = setInterval(()=>{
+      if(audioCtx && audioCtx.state === "suspended"){ audioCtx.resume().catch(()=>{}); }
       if(room && room.state === "playing"){
         updateTimerUI();
         checkAutoEnd();
@@ -608,7 +611,10 @@
     if(!visibilityListenerAdded){
       visibilityListenerAdded = true;
       document.addEventListener("visibilitychange", ()=>{
-        if(document.visibilityState === "visible" && roomCode){ pollOnce(); }
+        if(document.visibilityState === "visible" && roomCode){
+          unlockAudio();
+          pollOnce();
+        }
       });
     }
   }
