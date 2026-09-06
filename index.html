@@ -175,6 +175,8 @@
   let lastWarnSecond = null;
   let endBeepPlayed = false;
   let chatOpen = false;
+  let knownChatIds = new Set();
+  let unreadChatCount = 0;
 
   // ---------------- audio ----------------
   function ensureAudio(){
@@ -206,6 +208,7 @@
   function playCelebrationSound(){
     [440,554,659,880,1046].forEach((f,i)=> setTimeout(()=>beep(f, 0.28, 0.2), i*130));
   }
+  function playChatPing(){ beep(700, 0.1, 0.16); setTimeout(()=>beep(900, 0.1, 0.14), 90); }
 
   // ---------------- helpers ----------------
   function el(html){
@@ -336,6 +339,7 @@
       const fresh = await dbGet(`${GAME_PATH}/rooms/${code}`);
       roomCode = code;
       room = fresh;
+      knownChatIds = new Set(Object.keys(fresh.chat||{}));
       isHost = (fresh.hostId === playerId);
       screen = fresh.state || "lobby";
       startPolling();
@@ -347,6 +351,7 @@
     stopPolling();
     try{ await dbDelete(`${GAME_PATH}/rooms/${roomCode}/players/${playerId}`); }catch(e){}
     roomCode = null; room = null; isHost = false; screen = "home"; renderedRoundKey = null; expandedPlayer = null;
+    knownChatIds = new Set(); unreadChatCount = 0;
     render();
   }
 
@@ -503,9 +508,24 @@
         screen = room.state || "lobby";
       }
       if(prevScreen !== "finished" && screen === "finished"){ playCelebrationSound(); }
+
+      let newFromOthers = false;
+      Object.keys(room.chat||{}).forEach(id=>{
+        if(!knownChatIds.has(id)){
+          knownChatIds.add(id);
+          const m = room.chat[id];
+          if(m && m.pid !== playerId){
+            newFromOthers = true;
+            if(!chatOpen) unreadChatCount++;
+          }
+        }
+      });
+      if(newFromOthers && !chatOpen){ playChatPing(); }
+
       errorBanner = null;
       render();
       if(chatOpen) renderChatMessages();
+      updateChatBadge();
     }catch(e){ errorBanner = "تعذّر الاتصال بالخادم — بيعاد المحاولة تلقائيًا"; render(); }
   }
   function startPolling(){
@@ -632,7 +652,22 @@
   function toggleChat(){
     unlockAudio();
     chatOpen = !chatOpen;
-    if(chatOpen) openChatOverlay(); else closeChatOverlay();
+    if(chatOpen){ unreadChatCount = 0; openChatOverlay(); } else { closeChatOverlay(); }
+    updateChatBadge();
+  }
+  function updateChatBadge(){
+    const fab = qs("#chatFab");
+    if(!fab) return;
+    let badge = qs("#chatBadge");
+    if(unreadChatCount > 0 && !chatOpen){
+      if(!badge){
+        badge = el(`<div id="chatBadge" style="position:absolute; top:-4px; right:-4px; background:var(--urgent); color:#fff; font-size:11px; font-weight:800; min-width:20px; height:20px; border-radius:10px; display:flex; align-items:center; justify-content:center; padding:0 5px;"></div>`);
+        fab.appendChild(badge);
+      }
+      badge.textContent = unreadChatCount > 9 ? "9+" : String(unreadChatCount);
+    } else if(badge){
+      badge.remove();
+    }
   }
   function ensureChatFab(){
     if(!roomCode){
