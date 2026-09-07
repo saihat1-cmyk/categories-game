@@ -204,8 +204,8 @@
       osc.stop(ctx.currentTime + dur);
     }catch(e){}
   }
-  function playWarningBeep(){ beep(920, 0.14, 0.22); }
-  function playEndBeep(){ beep(260, 0.35, 0.25); setTimeout(()=>beep(180, 0.4, 0.25), 160); }
+  function playWarningBeep(){ beep(920, 0.16, 0.55); }
+  function playEndBeep(){ beep(260, 0.4, 0.6); setTimeout(()=>beep(180, 0.45, 0.6), 160); }
   function playCelebrationSound(){
     [440,554,659,880,1046].forEach((f,i)=> setTimeout(()=>beep(f, 0.28, 0.2), i*130));
   }
@@ -240,9 +240,9 @@
     if(!bgMusicPlaying) return;
     if(!bgMusicMuted){
       const step = bgMusicStep % 16;
-      if(step % 8 === 0){ playBgNote(110, 0.4, 0.05, "sine"); } // subtle low pulse, keeps a steady beat
+      if(step % 8 === 0){ playBgNote(110, 0.4, 0.16, "sine"); } // low pulse
       const idx = BG_PATTERN[step];
-      if(idx !== null){ playBgNote(BG_SCALE[idx], 0.3, 0.035, "triangle"); } // quiet melodic layer, stays under game sounds
+      if(idx !== null){ playBgNote(BG_SCALE[idx], 0.3, 0.11, "triangle"); } // melodic layer
     }
     bgMusicStep++;
     bgMusicTimer = setTimeout(bgMusicTick, BG_STEP_MS);
