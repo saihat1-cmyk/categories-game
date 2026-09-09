@@ -385,6 +385,7 @@
       roundNumber: 0,
       roundDuration: ROUND_DURATION,
       currentLetter: null,
+      usedLetters: {},
       players: { [playerId]: { name: playerName, joinedAt: {".sv":"timestamp"} } },
       rounds: {}
     };
@@ -423,19 +424,28 @@
     render();
   }
 
-  function pickLetter(exclude){
-    let pool = LETTERS.filter(l => l !== exclude);
-    return pool[Math.floor(Math.random()*pool.length)];
+  function pickLetter(usedLetters){
+    usedLetters = usedLetters || {};
+    let pool = LETTERS.filter(l => !usedLetters[l]);
+    let resetHappened = false;
+    if(pool.length === 0){
+      pool = LETTERS.slice();
+      resetHappened = true;
+    }
+    const letter = pool[Math.floor(Math.random()*pool.length)];
+    return { letter, resetHappened };
   }
 
   async function startRound(){
     if(!room) return;
     const nextRound = (room.roundNumber||0) + 1;
-    const letter = pickLetter(room.currentLetter);
+    const { letter, resetHappened } = pickLetter(room.usedLetters);
+    const newUsedLetters = resetHappened ? { [letter]: true } : { ...(room.usedLetters||{}), [letter]: true };
     try{
       await dbPatch(`${GAME_PATH}/rooms/${roomCode}`, {
         state:"playing",
         currentLetter: letter,
+        usedLetters: newUsedLetters,
         roundNumber: nextRound,
         roundDuration: selectedDuration,
         roundStartTime: {".sv":"timestamp"},
@@ -627,22 +637,34 @@
   let finalizeLock = false;
   function checkAutoEnd(){
     if(!room || room.state !== "playing" || !room.roundStartTime) return;
-    const elapsed = (nowServer() - room.roundStartTime)/1000;
-    const remaining = room.roundDuration - elapsed;
     const players = Object.keys(room.players||{});
     const readyCount = room.ready ? Object.keys(room.ready).length : 0;
-    const allReady = players.length > 0 && readyCount >= players.length;
-    if((remaining <= 0 || allReady) && !finalizeLock){
+    let shouldEnd;
+    if(room.roundDuration === "first"){
+      shouldEnd = readyCount >= 1;
+    }else{
+      const elapsed = (nowServer() - room.roundStartTime)/1000;
+      const remaining = room.roundDuration - elapsed;
+      const allReady = players.length > 0 && readyCount >= players.length;
+      shouldEnd = remaining <= 0 || allReady;
+    }
+    if(shouldEnd && !finalizeLock){
       finalizeLock = true;
       finalizeRound().finally(()=>{ setTimeout(()=>finalizeLock=false, 3000); });
     }
   }
   function updateTimerUI(){
     if(!room || !room.roundStartTime) return;
-    const elapsed = (nowServer() - room.roundStartTime)/1000;
-    const remaining = Math.max(0, room.roundDuration - elapsed);
     const fill = qs("#timerFill");
     const label = qs("#timerLabel");
+    if(room.roundDuration === "first"){
+      const elapsedSec = Math.floor((nowServer() - room.roundStartTime)/1000);
+      if(fill){ fill.style.width = "100%"; fill.style.background = "var(--accent)"; }
+      if(label){ label.textContent = "⚡ أول واحد يخلص — " + elapsedSec + " ث"; }
+      return;
+    }
+    const elapsed = (nowServer() - room.roundStartTime)/1000;
+    const remaining = Math.max(0, room.roundDuration - elapsed);
     if(fill){
       const pct = Math.max(0, (remaining/room.roundDuration)*100);
       fill.style.width = pct + "%";
@@ -837,15 +859,17 @@
 
   function durationPickerHTML(){
     return `
-      <div class="row" style="gap:8px; margin-bottom:12px;">
+      <div class="row" style="gap:8px; margin-bottom:8px;">
         ${[30,60,90].map(d=>`<button class="btn-sm ${selectedDuration===d?'btn-primary':'btn-outline'}" data-dur="${d}" style="flex:1; text-align:center;">${d} ث</button>`).join("")}
       </div>
+      <button class="btn-sm ${selectedDuration==='first'?'btn-primary':'btn-outline'}" data-dur="first" style="width:100%; text-align:center; margin-bottom:12px;">أول واحد يخلص ⚡</button>
     `;
   }
   function wireDurationPicker(){
     qsa("[data-dur]").forEach(b=>{
       b.addEventListener("click", ()=>{
-        selectedDuration = parseInt(b.dataset.dur);
+        const v = b.dataset.dur;
+        selectedDuration = v === "first" ? "first" : parseInt(v);
         render();
       });
     });
@@ -910,7 +934,7 @@
         <div class="letter-wrap">
           <div class="letter-tile">${room.currentLetter}</div>
           <div class="timer-track"><div class="timer-fill" id="timerFill" style="width:100%"></div></div>
-          <div class="timer-label" id="timerLabel">${room.roundDuration} ث</div>
+          <div class="timer-label" id="timerLabel">${room.roundDuration === 'first' ? '⚡ أول واحد يخلص' : room.roundDuration + ' ث'}</div>
         </div>
         <div class="stack" id="catList"></div>
         <div style="margin-top:18px;">
@@ -1119,8 +1143,8 @@
       qs("#playAgainBtn").addEventListener("click", async ()=>{
         unlockAudio();
         try{
-          await dbPatch(`${GAME_PATH}/rooms/${roomCode}`, { state:"lobby", rounds: null, roundNumber: 0, currentLetter: null, winnerId: null });
-          room = { ...room, state:"lobby", rounds:{}, roundNumber:0, currentLetter:null, winnerId:null };
+          await dbPatch(`${GAME_PATH}/rooms/${roomCode}`, { state:"lobby", rounds: null, roundNumber: 0, currentLetter: null, winnerId: null, usedLetters: null });
+          room = { ...room, state:"lobby", rounds:{}, roundNumber:0, currentLetter:null, winnerId:null, usedLetters:{} };
           screen = "lobby"; render();
         }catch(e){ showError(); }
       });
