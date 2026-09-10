@@ -156,7 +156,17 @@
 
   // ---------------- state ----------------
   let screen = "home"; // home | lobby | playing | results
-  let playerId = "p_" + Math.random().toString(36).slice(2, 10);
+  function getOrCreatePlayerId(){
+    try{
+      let pid = localStorage.getItem("catgame_playerId");
+      if(!pid){ pid = "p_" + Math.random().toString(36).slice(2, 10); localStorage.setItem("catgame_playerId", pid); }
+      return pid;
+    }catch(e){ return "p_" + Math.random().toString(36).slice(2, 10); }
+  }
+  function getSavedName(){ try{ return localStorage.getItem("catgame_playerName") || ""; }catch(e){ return ""; } }
+  function saveName(name){ try{ localStorage.setItem("catgame_playerName", name); }catch(e){} }
+
+  let playerId = getOrCreatePlayerId();
   let playerName = "";
   let roomCode = null;
   let room = null; // last fetched room doc
@@ -579,6 +589,14 @@
     try{
       const data = await dbGet(`${GAME_PATH}/rooms/${roomCode}`);
       if(!data){ showToast("انتهت الغرفة أو تم حذفها"); leaveRoom(); return; }
+      if(data.players && !data.players[playerId]){
+        showToast("تم إزالتك من الغرفة من قبل المضيف 😕");
+        stopPolling();
+        roomCode = null; room = null; isHost = false; screen = "home"; renderedRoundKey = null; expandedPlayer = null;
+        knownChatIds = new Set(); unreadChatCount = 0;
+        render();
+        return;
+      }
       const prevScreen = screen;
       room = data;
       isHost = (room.hostId === playerId);
@@ -816,16 +834,17 @@
       </div>
     `;
     let mode = "create";
+    const savedName = getSavedName();
     function renderModeBody(){
       const body = qs("#modeBody");
       if(mode === "create"){
         body.innerHTML = `
-          <input type="text" id="nameInput" placeholder="اسمك" maxlength="20">
+          <input type="text" id="nameInput" placeholder="اسمك" maxlength="20" value="${savedName}">
           <button class="btn btn-primary" id="goBtn">إنشاء الغرفة</button>
         `;
       }else{
         body.innerHTML = `
-          <input type="text" id="nameInput" placeholder="اسمك" maxlength="20">
+          <input type="text" id="nameInput" placeholder="اسمك" maxlength="20" value="${savedName}">
           <input type="text" id="codeInput" placeholder="كود الغرفة (٤ أرقام)" maxlength="4" inputmode="numeric">
           <button class="btn btn-primary" id="goBtn">دخول الغرفة</button>
         `;
@@ -834,6 +853,7 @@
         unlockAudio();
         const name = qs("#nameInput").value.trim();
         if(!name){ showToast("اكتب اسمك أول 🙂"); return; }
+        saveName(name);
         if(mode === "create"){
           qs("#goBtn").textContent = "جاري الإنشاء...";
           await createRoom(name);
@@ -903,7 +923,7 @@
           <div class="avatar">${(p.name||"?")[0]}</div>
           <div>${p.name}${pid===playerId ? " (أنت)":""}</div>
           <div class="spacer"></div>
-          ${pid===room.hostId ? `<div class="host-badge">مضيف</div>`:""}
+          ${pid===room.hostId ? `<div class="host-badge">مضيف</div>` : (isHost ? `<button class="btn-sm btn-danger-outline" data-kick="${pid}" style="padding:6px 12px; font-size:12px;">طرد</button>` : "")}
         </div>
       `));
     });
@@ -914,6 +934,19 @@
     if(isHost){
       wireDurationPicker();
       qs("#startBtn").addEventListener("click", ()=>{ unlockAudio(); startRound(); });
+      qsa("[data-kick]", list).forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const targetPid = btn.dataset.kick;
+          if(!window.confirm("متأكد تبي تطرد هذا اللاعب من الغرفة؟")) return;
+          try{
+            await dbDelete(`${GAME_PATH}/rooms/${roomCode}/players/${targetPid}`);
+            const updatedPlayers = { ...room.players };
+            delete updatedPlayers[targetPid];
+            room = { ...room, players: updatedPlayers };
+            render();
+          }catch(e){ showToast("تعذّر طرد اللاعب، جرب مرة ثانية 🙏"); }
+        });
+      });
     }
     qs("#leaveBtn").addEventListener("click", leaveRoom);
   }
